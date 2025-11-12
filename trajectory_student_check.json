@@ -1,0 +1,6 @@
+[
+  {"action": {"name": "click", "args": {"selector": "role=treeitem[name='학적/확인서']"}}},
+  {"action": {"name": "click", "args": {"selector": "text=학적부열람"}}},
+  {"action": {"name": "wait_for", "args": { "event": "selector", "selector": "text=학적부열람", "timeout_ms": 4000 } } },
+  {"action": {"name": "sleep", "args": {"timeout_ms": 2000}}}
+]

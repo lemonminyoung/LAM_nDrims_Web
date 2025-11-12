@@ -1,0 +1,11 @@
+[
+  {"action": {"name": "click", "args": {"selector": "role=treeitem[name='수업/강의평가']"}}},
+  {"action": {"name": "click", "args": {"selector": "text=종합강의시간표조회"}}},
+  {"action": {"name": "sleep", "args": {"timeout_ms": 2000}}},
+  {"action": {"name": "type", "args": {"selector": "input.cl-text[type='text']", "text": "성연식"}}},
+  {"action": {"name": "sleep", "args": {"timeout_ms": 1000}}},
+  {"action": {"name": "click", "args": {"selector": "text=조회"}}},
+  {"action": {"name": "sleep", "args": {"timeout_ms": 3000}}},
+  {"action": {"name": "click", "args": {"selector": "text=강의계획서"}}},
+  {"action": {"name": "sleep", "args": {"timeout_ms": 2000}}}
+]

@@ -1,0 +1,8 @@
+[
+  {"action": {"name": "goto", "args": {"url": "https://ndrims.dongguk.edu/unis/index.do"}}},
+  {"action": {"name": "type", "args": {"selector": "input[aria-label='아이디']", "text": "${DG_USERNAME}"}}},
+  {"action": {"name": "type", "args": {"selector": "input[aria-label='비밀번호']", "text": "${DG_PASSWORD}"}}},
+  {"action": {"name": "click", "args": {"selector": "role=button[name='로그인']"}}},
+  {"action": {"name": "click", "args": {"selector": "role=button[name='확인']"}}},
+  {"action": {"name": "wait_for", "args": {"event": "url_change", "expected_url": "main/main.clx", "timeout_ms": 9000}}}
+]
