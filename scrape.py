@@ -71,38 +71,37 @@ async def scrape_current_page(page: Page):
             print(f"[INFO] 팝업 제목: {current_page['title']}")
             return current_page
 
-        # 기존 탭패널 감지
+        # 탭패널 감지 (이전 작동 버전의 로직)
         tabpanels = await page.locator('[role="tabpanel"]').all()
+        if not tabpanels:
+            current_page["title"] = "탭패널 없음"
+            return current_page
+
+        # display:none이거나 aria-hidden인 패널 제외, visible한 패널만
         visible_panels = [p for p in tabpanels if await p.is_visible()]
-        # role=tabpanel이 없는 경우 → cl-form-placeholder 사용
         if not visible_panels:
-            placeholders = await page.locator("div.cl-form-placeholder").all()
-            visible_panels = [p for p in placeholders if await p.is_visible()]
-            if visible_panels:
-                print("[INFO] 일반 탭패널 미발견 → cl-form-placeholder 감지")
+            current_page["title"] = "활성 탭패널 인식 실패"
+            return current_page
+
+        panel = visible_panels[0]  # 첫 번째 활성 탭패널
+
+        # 제목 탐색 로직 (이전 작동 버전)
+        try:
+            title_el = panel.locator("h1, h2, h3, [role=heading]").first
+            if await title_el.count() > 0:
+                current_page["title"] = (await title_el.inner_text()).strip()
             else:
-                current_page["title"] = "활성 탭패널/placeholder 인식 실패"
-                return current_page
-
-        panel = visible_panels[0]
-
-        # 제목 탐색 로직 강화
-        title_el = panel.locator("h1, h2, h3, [role=heading]").first
-        if await title_el.count() > 0:
-            current_page["title"] = (await title_el.inner_text()).strip()
-        else:
-            # 학적부 구조: div.cl-text 안에 제목 존재
-            cl_text_el = page.locator("div.cl-text").first
-            if await cl_text_el.count() > 0:
-                text_val = (await cl_text_el.inner_text()).strip()
-                # 너무 일반적인 div.cl-text 방지: 짧고 의미 있는 텍스트만 제목으로 인정
-                if len(text_val) < 30 and all(k not in text_val for k in ["닫기", "조회", "검색"]):
-                    current_page["title"] = text_val
-                    print(f"[INFO] cl-text 제목 감지: {text_val}")
+                # 없으면 inner_text 첫 줄
+                raw_text = (await panel.inner_text()).strip().split("\n")[0]
+                # 키워드 필터링: nDRIMS 페이지 제목에 포함될 법한 키워드
+                if any(k in raw_text for k in ["조회", "등록", "관리", "신청", "확인", "열람", "출력", "발급"]):
+                    current_page["title"] = raw_text
+                    print(f"[INFO] 탭패널 첫 줄에서 제목 감지: {raw_text}")
                 else:
                     current_page["title"] = "제목 인식 실패"
-            else:
-                current_page["title"] = "제목 인식 실패"
+        except Exception as e:
+            print(f"[ERROR] 제목 추출 실패: {e}")
+            current_page["title"] = "제목 인식 실패"
 
         #form 필드 수집 (기존과 동일)
         form_fields = []

@@ -470,7 +470,8 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
 
         # 비교
         if expected_title:
-            if expected_title in actual_title or actual_title in expected_title:
+            # 빈 문자열 처리: actual_title이 비어있으면 불일치로 처리
+            if actual_title and (expected_title in actual_title or actual_title in expected_title):
                 is_success = True
                 verification_message = f"'{expected_title}' 페이지 로드 완료"
                 print("[검증] ✓ 제목 일치")
@@ -553,10 +554,11 @@ async def execute_action_command():
         # trajectory 타입 액션이면 실행
         if generated_action.get("type") == "trajectory":
             actions_file = generated_action.get("actions_file")
-            action_description = generated_action.get("description", "")
+            original_description = generated_action.get("description", "")
 
             print(f"[실행] Trajectory 액션 실행: {actions_file}")
-            print(f"[목적] {action_description}")
+            if original_description:
+                print(f"[원본 목적] {original_description}")
 
             trajectory_path = Path(__file__).parent / actions_file
 
@@ -579,6 +581,11 @@ async def execute_action_command():
                 actions = trajectory_data
                 verification = None
                 print("[INFO] Trajectory 구 형식 감지 (검증 정보 없음)")
+
+            # 마지막 액션에서 실제 목적 추출 (더 정확함)
+            extracted_title = extract_expected_page_title(actions)
+            action_description = extracted_title if extracted_title else original_description
+            print(f"[실제 목적] {action_description}")
 
             if ACTIVE_BROWSERS:
                 print("[INFO] 이미 열려있는 브라우저에서 액션 실행")
