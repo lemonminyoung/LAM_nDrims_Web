@@ -1,6 +1,5 @@
 [
-  {"action": {"name": "click", "args": {"selector": "role=treeitem[name='졸업']"}}},
-  {"action": {"name": "click", "args": {"selector": "text=취득학점확인서조회"}}},
-  {"action": {"name": "wait_for", "args": { "event": "selector", "selector": "text=취득학점확인서조회", "timeout_ms": 4000 } } },
+  {"action": {"name": "click", "args": {"selector": "role=treeitem[name='【학생신청】신청함']"}}},
+  {"action": {"name": "click", "args": {"selector": "[name='[성적]이수구분변경신청']"},"state":"grid"}},
   {"action": {"name": "sleep", "args": {"timeout_ms": 2000}}}
 ]

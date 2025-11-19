@@ -132,7 +132,7 @@ async def scrape_current_page(page: Page):
 
         current_page["form_fields"] = form_fields or "인식되지 않았다"
 
-        #print(json.dumps({"current_page": current_page}, ensure_ascii=False, indent=2))
+        print(json.dumps({"current_page": current_page}, ensure_ascii=False, indent=2))
         return current_page
 
     except Exception as e:

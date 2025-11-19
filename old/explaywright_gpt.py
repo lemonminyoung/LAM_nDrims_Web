@@ -1,5 +1,4 @@
 import json
-import re
 from pathlib import Path
 from playwright_client import get_browser
 import asyncio
@@ -64,78 +63,7 @@ class ActionExecutor:
         # log 액션 처리
         print(f"[LOG] {args.get('message', '')}")
 
-    async def click_grid(self, args):
-        """
-        Grid에서 특정 텍스트를 찾아 해당 행의 '신청' 버튼을 클릭하는 액션
-
-        Args:
-            args: {
-                "selector": "[name='[성적]이수구분변경신청']",  # selector에서 텍스트 추출
-                "target_text": "[성적]이수구분변경신청"  # 또는 직접 텍스트 전달
-            }
-        """
-        # target_text가 직접 주어지지 않으면 selector에서 추출
-        target_text = args.get("target_text")
-        if not target_text:
-            selector = args.get("selector", "")
-            # selector에서 name 속성 값 추출: "[name='텍스트']" → "텍스트"
-            name_match = re.search(r"\[name=['\"](.+?)['\"]\]", selector)
-            if name_match:
-                target_text = name_match.group(1)
-            else:
-                raise ValueError(f"[Grid 오류] target_text가 없고 selector에서도 추출 불가: {selector}")
-
-        print(f"[Grid] 텍스트 '{target_text}'를 포함한 셀 찾기...")
-
-        # 1. 텍스트를 가진 gridcell 찾기 (aria-label 안에 텍스트 포함)
-        text_cell = self.page.get_by_role(
-            "gridcell",
-            name=re.compile(re.escape(target_text))
-        ).first
-
-        # 셀의 aria-label 읽기: 예) "1행 3열 [학적]휴학신청(…)"
-        aria_label = await text_cell.get_attribute("aria-label")
-        if not aria_label:
-            raise RuntimeError(f"[Grid 오류] aria-label을 읽을 수 없음")
-
-        print(f"[Grid] 발견된 셀의 aria-label: {aria_label}")
-
-        # 2. "1행 3열 ..." 에서 행/열 번호 파싱
-        m = re.search(r"(\d+)행\s+(\d+)열", aria_label)
-        if not m:
-            raise RuntimeError(f"[Grid 오류] 행/열 정보를 파싱할 수 없음: {aria_label}")
-
-        row_index = m.group(1)
-        # 신청 버튼이 있는 열 번호 (2열이라고 가정)
-        apply_col_index = "2"
-
-        print(f"[Grid] 파싱된 위치: {row_index}행, 신청 버튼은 {apply_col_index}열에 위치")
-
-        # 3. 같은 행(row_index), 신청 버튼 셀의 aria-label 패턴 만들기
-        apply_button = self.page.get_by_role(
-            "button",
-            name=re.compile(rf"{row_index}행\s+{apply_col_index}열")
-        ).first
-
-        # 4. 클릭
-        print(f"[Grid] {row_index}행 {apply_col_index}열의 신청 버튼 클릭...")
-        await apply_button.click()
-        print(f"[Grid] 신청 버튼 클릭 완료!")
-
     async def run(self, act):
-        # ========== 팝업 자동 처리 추가 (2025-11-19) ==========
-        # nDRIMS "실행 중인 새창이 있습니다" 팝업 자동 처리
-        try:
-            confirm_btn = self.page.locator("role=button[name='확인']").first
-            if await confirm_btn.is_visible(timeout=500):
-                await confirm_btn.click()
-                print("[팝업 자동 처리] '확인' 버튼 클릭 (실행 중인 새창 팝업)")
-                # 팝업 닫힌 후 잠깐 대기
-                await self.page.wait_for_timeout(300)
-        except:
-            pass  # 팝업 없으면 무시
-        # ========== 팝업 처리 끝 ==========
-
         name = act["name"]
         method = getattr(self, name, None)
         if method:

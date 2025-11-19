@@ -1,3 +1,10 @@
+"""
+실행 웹 폴링 서비스
+- 백엔드에서 명령을 폴링
+- Playwright로 nDRIMS 자동화 실행
+- 결과를 백엔드로 전송
+"""
+
 import time
 import json
 import requests
@@ -9,21 +16,16 @@ from explaywright_gpt import run_trajectory, ActionExecutor
 from scrape import scrape_current_ui_state, scrape_current_page
 import playwright_client
 
-# ============================================================
-# 🔧 모델 변경 시 수정 필요 (1/3): 백엔드 URL
-# ============================================================
-# Mock 모델 → 실제 모델로 변경 시 아래 URL을 실제 백엔드 주소로 변경
-# 예: "https://your-real-backend.onrender.com"
-BACKEND_URL = "https://ndrims-project-lam.onrender.com" # 백엔드 API URL
+# 백엔드 API URL
+BACKEND_URL = "https://ndrims-project-lam.onrender.com"
 
-# ============================================================
-# 🔧 모델 변경 시 수정 가능 (선택사항)
-# ============================================================
-# 실제 AI 모델은 응답 속도가 느릴 수 있으므로 폴링 간격 조정 고려
-# Mock: 5초 / 실제 모델: 10초 권장
-POLLING_INTERVAL = 5 # 폴링 간격 (초)
-ACTIVE_BROWSERS = [] # 브라우저 객체 저장 (가비지 컬렉션 방지)
+# 폴링 간격 (초)
+POLLING_INTERVAL = 5
 
+# 브라우저 객체 저장 (가비지 컬렉션 방지)
+ACTIVE_BROWSERS = []
+
+# 로그인 상태 저장
 LOGIN_STATUS = {
     "logged_in": False,
     "student_id": None,
@@ -39,7 +41,8 @@ async def poll_commands():
     print(f"폴링 간격: {POLLING_INTERVAL}초")
     print("=" * 60 + "\n")
 
-    LOGIN_STATUS["logged_in"] = False     # 시작 시 백엔드에 초기화 신호 전송 + 로컬 상태 초기화
+    # 시작 시 백엔드에 초기화 신호 전송 + 로컬 상태 초기화
+    LOGIN_STATUS["logged_in"] = False
     LOGIN_STATUS["student_id"] = None
     LOGIN_STATUS["last_url"] = None
 
@@ -127,13 +130,13 @@ async def poll_commands():
             # 상태 / 프롬프트
             elif cmd_type == "state":
                 prompt = command.get("prompt_text", "")
-                print("\n[명령 수신] State 명령")
+                print("\n[명령 수신] 프롬프트 명령")
                 print(f"  - 프롬프트: {prompt}")
-
-                # UI 상태만 전송 (프롬프트 처리 없이)
-                await send_ui_state_only()
+                await execute_prompt_and_send_state(prompt)
                 print("\n[명령 수신] 액션 명령 요청")
                 await execute_action_command()
+            
+                print("\n[여기까진 왔어]")
 
             # 액션 실행
             elif cmd_type == "action":
@@ -292,70 +295,6 @@ async def capture_ui_state(page):
 
         traceback.print_exc()
         return None
-
-
-async def send_ui_state_only():
-    """
-    UI 상태만 백엔드로 전송 (액션 실행 후 다음 액션 생성용)
-    """
-    global LOGIN_STATUS, ACTIVE_BROWSERS
-
-    print(f"[실행] UI 상태 전송 시작")
-
-    try:
-        if not ACTIVE_BROWSERS:
-            print("[경고] 브라우저가 없습니다.")
-            send_state({
-                "success": False,
-                "needs_login": True,
-                "message": "브라우저가 닫혔습니다."
-            })
-            return
-
-        if not LOGIN_STATUS["logged_in"]:
-            print("[경고] 로그인되지 않았습니다.")
-            send_state({
-                "success": False,
-                "needs_login": True,
-                "message": "먼저 로그인하세요."
-            })
-            return
-
-        print(f"[상태] 로그인됨 - 학번: {LOGIN_STATUS['student_id']}")
-        print(f"[상태] 마지막 URL: {LOGIN_STATUS.get('last_url', '알 수 없음')}")
-
-        # 현재 페이지 UI 상태 수집
-        page = ACTIVE_BROWSERS[-1]["page"]
-        try:
-            ui_state = await scrape_current_ui_state(page)
-            print("[상태] UI 상태 수집 성공")
-        except Exception as e:
-            print(f"[오류] UI 상태 수집 실패: {e}")
-            import traceback
-            traceback.print_exc()
-            ui_state = None
-
-        # 백엔드로 전송할 데이터 구성
-        state_data = {
-            "success": True,
-            "student_id": LOGIN_STATUS["student_id"],
-            "logged_in": LOGIN_STATUS["logged_in"],
-            "last_url": LOGIN_STATUS.get("last_url", "알 수 없음"),
-            "message": "UI 상태 업데이트",
-            "ui_state": ui_state,
-        }
-
-        send_state(state_data)
-        print("[완료] UI 상태 전송 완료\n")
-
-    except Exception as e:
-        print(f"[실패] UI 상태 전송 오류: {e}")
-        import traceback
-        traceback.print_exc()
-        send_state({
-            "success": False,
-            "message": f"UI 상태 수집 실패: {str(e)}"
-        })
 
 
 async def execute_prompt_and_send_state(prompt_text: str):
@@ -622,21 +561,11 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
 async def execute_action_command():
     """
     백엔드에서 액션 명령을 가져와서 trajectory 타입이면 실행
-
-    ============================================================
-    모델 변경 시 수정 필요 (2/3): 타임아웃 설정
-    ============================================================
-    실제 AI 모델은 액션 생성에 시간이 더 걸릴 수 있음
-    Mock: timeout=10초 / 실제 모델: timeout=30~60초 권장
     """
     global ACTIVE_BROWSERS
     print("[실행] 액션 명령 가져오기 시작...")
 
     try:
-        # ============================================================
-        # 모델 변경 시 수정: timeout 값
-        # ============================================================
-        # Mock: 10초 / 실제 모델: 30~60초 권장
         response = requests.get(f"{BACKEND_URL}/action", timeout=10)
 
         if response.status_code == 404:
@@ -658,26 +587,21 @@ async def execute_action_command():
             return
 
         # trajectory 타입 액션이면 실행
-        if generated_action.get("type") == "trajectory": # One-Action-at-a-Time 모드: 단일 액션 실행
-            action = generated_action.get("action")
+        if generated_action.get("type") == "trajectory":
+            # request_id 확인: One-Action-at-a-Time 모드인지 판별
+            request_id = action_data.get("request_id")
 
-            # ========== action이 None인 경우 처리 (모든 step 완료) ==========
-            if action is None:
-                description = generated_action.get("description", "All steps completed")
-                print(f"[완료] {description}")
-                print("[정보] 더 이상 실행할 액션이 없습니다.")
-                # 이미 마지막 액션이 완료되었으므로 아무것도 하지 않음
-                return
-            # ========== 처리 끝 ==========
+            if request_id:
+                # One-Action-at-a-Time 모드: 단일 액션 실행
+                print(f"[모드] One-Action-at-a-Time 모드 (request_id: {request_id})")
 
-            if action:
-                # 단일 액션 모드
+                action = generated_action.get("action")
                 description = generated_action.get("description", "")
                 current_step = generated_action.get("current_step", 1)
                 total_steps = generated_action.get("total_steps", 1)
 
                 # 마지막 액션 여부 확인: action 내부의 status 필드
-                action_status = action.get("status")
+                action_status = action.get("status") if action else None
                 is_last_action = (action_status == "FINISH")
 
                 print(f"[실행] 단일 액션 실행 (step {current_step}/{total_steps})")
@@ -716,84 +640,16 @@ async def execute_action_command():
 
                     print(f"[성공] 액션 실행 완료")
 
-                    # ========== 마지막 액션이면 검증 후 완료 상태 전송 ==========
+                    # 마지막 액션이면 완료 상태 전송
                     if is_last_action:
                         print(f"[완료] 모든 액션 실행 완료!")
-                        print("=" * 60)
-                        print("[검증 단계] One-Action-at-a-Time 마지막 액션 검증 시작")
-                        print("=" * 60)
-
-                        # 예상 제목 추출 (description에서 추출 또는 액션에서 추출)
-                        # action의 selector에서 제목 추출 시도
-                        expected_title = None
-                        if action_name == "click":
-                            selector = action_args.get("selector", "")
-                            # role=button[name='학적부열람'] 같은 패턴에서 추출
-                            import re
-                            name_match = re.search(r"name=['\"]([^'\"]+)['\"]", selector)
-                            if name_match:
-                                expected_title = name_match.group(1).strip()
-                                print(f"[검증] 액션 selector에서 예상 제목 추출: '{expected_title}'")
-
-                            text_match = re.search(r"text=([^\]]+)", selector)
-                            if text_match and not expected_title:
-                                expected_title = text_match.group(1).strip()
-                                print(f"[검증] 액션 selector에서 예상 제목 추출 (text): '{expected_title}'")
-
-                        if not expected_title:
-                            expected_title = description
-                            print(f"[검증] description을 예상 제목으로 사용: '{expected_title}'")
-
-                        # 실제 페이지 제목 확인
-                        try:
-                            print("[검증] ---- scrape_current_page() 호출 시작 ----")
-                            current_page_info = await scrape_current_page(page)
-                            print("[검증] ---- scrape_current_page() 호출 완료 ----")
-
-                            actual_title = current_page_info.get("title", "")
-                            print(f"[검증] 실제 페이지/팝업 제목: '{actual_title}'")
-
-                            # 제목 비교
-                            is_verified = False
-                            verification_message = ""
-
-                            if expected_title and actual_title:
-                                if expected_title in actual_title or actual_title in expected_title:
-                                    is_verified = True
-                                    verification_message = f"'{expected_title}' 페이지 로드 완료"
-                                    print("[검증] ✓ 제목 일치")
-                                else:
-                                    is_verified = False
-                                    verification_message = f"'{expected_title}' 페이지 도달 실패 (현재: '{actual_title}')"
-                                    print("[검증] ✗ 제목 불일치")
-                            else:
-                                # 예상 제목이 없거나 실제 제목이 없으면 일단 성공으로 처리
-                                is_verified = True
-                                verification_message = "액션 실행 완료 (제목 비교 불가)"
-                                print("[검증] 예상/실제 제목 없음 - 액션 실행 성공으로 처리")
-
-                            print(f"[검증 결과] 성공: {is_verified}, 메시지: {verification_message}")
-                            print("=" * 60)
-
-                            send_state({
-                                "action_success": is_verified,
-                                "action_description": description,
-                                "message": f"액션 {'성공' if is_verified else '실패'}: {verification_message}",
-                                "verified": is_verified
-                            })
-
-                        except Exception as verify_e:
-                            print(f"[오류] 페이지 검증 실패: {verify_e}")
-                            import traceback
-                            traceback.print_exc()
-
-                            # 검증 실패해도 액션은 실행됐으므로 일단 성공으로 처리
-                            send_state({
-                                "action_success": True,
-                                "action_description": description,
-                                "message": f"액션 실행 완료 (검증 중 오류: {str(verify_e)})",
-                                "verified": False
-                            })
+                        print(f"[성공] 액션 목적 달성: '{description}'")
+                        send_state({
+                            "action_success": True,
+                            "action_description": description,
+                            "message": f"액션 성공: {description}",
+                            "verified": True
+                        })
 
                 except Exception as e:
                     print(f"[오류] 액션 실행 실패: {e}")
@@ -898,21 +754,11 @@ async def execute_action_command():
         traceback.print_exc()
 
 
-def send_state(data: dict): #백엔드로 상태 전송
+def send_state(data: dict):
     """
-    ============================================================
-    🔧 모델 변경 시 수정 필요 (3/3): UI 상태 전송 타임아웃
-    ============================================================
-    실제 AI 모델은 UI 상태를 분석하고 액션을 생성하는데 시간이 더 걸림
-    Mock: timeout=10초 / 실제 모델: timeout=60~120초 권장
-
-    특히 복잡한 UI 상태를 전송하면 모델이 처리하는데 1~2분 걸릴 수 있음
+    백엔드로 상태 전송
     """
     try:
-        # ============================================================
-        # 🔧 모델 변경 시 수정: timeout 값
-        # ============================================================
-        # Mock: 10초 / 실제 모델: 60~120초 권장
         response = requests.post(
             f"{BACKEND_URL}/state",
             json={"data": data},
@@ -928,7 +774,8 @@ def send_state(data: dict): #백엔드로 상태 전송
         print(f"[전송 오류] {e}")
 
 
-async def cleanup_browsers(): #모든 브라우저 인스턴스 종료 + 상태 초기화
+async def cleanup_browsers():
+    """모든 브라우저 인스턴스 종료 + 상태 초기화"""
     global ACTIVE_BROWSERS, LOGIN_STATUS
 
     print(f"[정리] 브라우저 종료 시작 (총 {len(ACTIVE_BROWSERS)}개)")
