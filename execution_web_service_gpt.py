@@ -616,39 +616,18 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
         # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
         store_verification_result(is_success, expected_title if expected_title else verification_message)
 
-        # 결과 전송
+        # 결과 로깅
         if is_success:
             print(f"[성공] 액션 목적 달성: '{action_description}'")
-            result = {
-                "action_success": True,
-                "action_description": action_description,
-                "message": f"액션 성공: {verification_message}",
-                "verified": True,
-            }
         else:
             print(f"[실패] 액션 목적 미달성: '{action_description}'")
-            result = {
-                "action_success": False,
-                "action_description": action_description,
-                "message": f"액션 실패: {verification_message}",
-                "verified": False,
-            }
-
-        print("[검증] ---- 상태 전송 시작 ----")
-        send_state(result)
-        print("[검증] ---- 상태 전송 완료 ----")
 
     except Exception as e:
         print(f"[오류] 페이지 검증 실패: {e}")
         import traceback
         traceback.print_exc()
-        send_state(
-            {
-                "action_success": False,
-                "action_description": action_description,
-                "message": f"검증 중 오류 발생: {e}",
-            }
-        )
+        # 검증 오류 시에도 결과 저장
+        store_verification_result(False, f"검증 중 오류 발생: {str(e)}")
 
     print("=" * 60)
     print("[검증 단계 종료]")
@@ -817,13 +796,6 @@ async def execute_action_command():
                             # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
                             store_verification_result(is_verified, expected_title if expected_title else verification_message)
 
-                            send_state({
-                                "action_success": is_verified,
-                                "action_description": description,
-                                "message": f"액션 {'성공' if is_verified else '실패'}: {verification_message}",
-                                "verified": is_verified
-                            })
-
                         except Exception as verify_e:
                             print(f"[오류] 페이지 검증 실패: {verify_e}")
                             import traceback
@@ -832,25 +804,13 @@ async def execute_action_command():
                             # 검증 오류 시에도 결과 저장
                             store_verification_result(False, f"검증 오류: {str(verify_e)}")
 
-                            # 검증 실패해도 액션은 실행됐으므로 일단 성공으로 처리
-                            send_state({
-                                "action_success": True,
-                                "action_description": description,
-                                "message": f"액션 실행 완료 (검증 중 오류: {str(verify_e)})",
-                                "verified": False
-                            })
-
                 except Exception as e:
                     print(f"[오류] 액션 실행 실패: {e}")
                     import traceback
                     traceback.print_exc()
 
-                    send_state({
-                        "action_success": False,
-                        "action_description": description,
-                        "message": f"액션 실행 실패: {str(e)}",
-                        "verified": False
-                    })
+                    # 액션 실행 실패 시에도 결과 저장
+                    store_verification_result(False, f"액션 실행 실패: {str(e)}")
 
                 print(f"[완료] One-Action-at-a-Time 액션 처리 완료\n")
                 return
