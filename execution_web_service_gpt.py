@@ -589,6 +589,18 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
             expected_title = extract_expected_page_title(actions)
             print(f"[검증] trajectory 내부에서 예상 제목 추출: '{expected_title}'")
 
+        # 🔧 페이지 로딩 완료 대기 (액션 실행 직후 로딩 시간 확보)
+        print("[검증] 페이지 로딩 대기 중...")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=3000)
+            print("[검증] 페이지 로딩 완료")
+        except Exception as wait_e:
+            print(f"[검증] 페이지 로딩 대기 타임아웃 (계속 진행): {wait_e}")
+
+        # 추가 대기: 팝업이나 동적 콘텐츠 로딩 시간 확보
+        await asyncio.sleep(1.5)
+        print("[검증] 추가 대기 완료 (1.5초)")
+
         # 🔍 검증 시작 로그 추가
         print("[검증] ---- scrape_current_page() 호출 시작 ----")
         current_page_info = await scrape_current_page(page)
@@ -761,6 +773,18 @@ async def execute_action_command():
                         if not expected_title:
                             expected_title = description
                             print(f"[검증] description을 예상 제목으로 사용: '{expected_title}'")
+
+                        # 🔧 페이지 로딩 완료 대기 (액션 실행 직후 로딩 시간 확보)
+                        print("[검증] 페이지 로딩 대기 중...")
+                        try:
+                            await page.wait_for_load_state("networkidle", timeout=3000)
+                            print("[검증] 페이지 로딩 완료")
+                        except Exception as wait_e:
+                            print(f"[검증] 페이지 로딩 대기 타임아웃 (계속 진행): {wait_e}")
+
+                        # 추가 대기: 팝업이나 동적 콘텐츠 로딩 시간 확보
+                        await asyncio.sleep(1.5)
+                        print("[검증] 추가 대기 완료 (1.5초)")
 
                         # 실제 페이지 제목 확인
                         try:
