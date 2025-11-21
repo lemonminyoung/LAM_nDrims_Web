@@ -598,7 +598,7 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
             print(f"[검증] 페이지 로딩 대기 타임아웃 (계속 진행): {wait_e}")
 
         # 추가 대기: 팝업이나 동적 콘텐츠 로딩 시간 확보
-        await asyncio.sleep(1.5)
+        await asyncio.sleep(5)
         print("[검증] 추가 대기 완료 (1.5초)")
 
         # 🔍 검증 시작 로그 추가
