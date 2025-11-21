@@ -15,7 +15,7 @@ import playwright_client
 # Mock 모델 → 실제 모델로 변경 시 아래 URL을 실제 백엔드 주소로 변경
 # 예: "https://your-real-backend.onrender.com"
 BACKEND_URL = "https://ndrims-project-lam.onrender.com" # 백엔드 API URL
-
+#BACKEND_URL = "http://127.0.0.1:8000" # 백엔드 API URL
 # ============================================================
 # 🔧 모델 변경 시 수정 가능 (선택사항)
 # ============================================================
@@ -28,6 +28,12 @@ LOGIN_STATUS = {
     "logged_in": False,
     "student_id": None,
     "last_url": None,
+}
+
+VERIFICATION_RESULT = {
+    "success": False,
+    "message": "",
+    "has_result": False,  # 검증 결과가 있는지 여부
 }
 
 
@@ -133,12 +139,39 @@ async def poll_commands():
                 # UI 상태만 전송 (프롬프트 처리 없이)
                 await send_ui_state_only()
                 print("\n[명령 수신] 액션 명령 요청")
-                await execute_action_command()
+                #await execute_action_command()
 
             # 액션 실행
             elif cmd_type == "action":
                 print("\n[명령 수신] 액션 명령 요청")
                 await execute_action_command()
+
+            # 검증 결과 요청
+            elif cmd_type == "verification":
+                print("\n[명령 수신] 검증 결과 요청")
+                global VERIFICATION_RESULT
+                if VERIFICATION_RESULT["has_result"]:
+                    # 검증 결과를 백엔드로 전송
+                    try:
+                        response = requests.post(
+                            f"{BACKEND_URL}/verification",
+                            json={
+                                "success": VERIFICATION_RESULT["success"],
+                                "message": VERIFICATION_RESULT["message"]
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=5,
+                        )
+                        if response.status_code == 200:
+                            print(f"[검증 전송 완료] 성공={VERIFICATION_RESULT['success']}, 메시지={VERIFICATION_RESULT['message']}")
+                            # 전송 후 초기화
+                            VERIFICATION_RESULT = {"success": False, "message": "", "has_result": False}
+                        else:
+                            print(f"[검증 전송 실패] 상태 코드: {response.status_code}")
+                    except Exception as e:
+                        print(f"[검증 전송 오류] {e}")
+                else:
+                    print("[경고] 검증 결과가 없습니다.")
 
             # 브라우저 종료
             elif cmd_type in ("shutdown","logout"):
@@ -580,6 +613,9 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
             is_success = fail_count == 0
             verification_message = "액션 실행 완료" if is_success else "일부 액션 실행 실패"
 
+        # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
+        store_verification_result(is_success, expected_title if expected_title else verification_message)
+
         # 결과 전송
         if is_success:
             print(f"[성공] 액션 목적 달성: '{action_description}'")
@@ -677,6 +713,9 @@ async def execute_action_command():
                 total_steps = generated_action.get("total_steps", 1)
 
                 # 마지막 액션 여부 확인: action 내부의 status 필드
+                if action.get("status") is None:
+                    print("status가 없습니다.")
+                
                 action_status = action.get("status")
                 is_last_action = (action_status == "FINISH")
 
@@ -775,6 +814,9 @@ async def execute_action_command():
                             print(f"[검증 결과] 성공: {is_verified}, 메시지: {verification_message}")
                             print("=" * 60)
 
+                            # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
+                            store_verification_result(is_verified, expected_title if expected_title else verification_message)
+
                             send_state({
                                 "action_success": is_verified,
                                 "action_description": description,
@@ -786,6 +828,9 @@ async def execute_action_command():
                             print(f"[오류] 페이지 검증 실패: {verify_e}")
                             import traceback
                             traceback.print_exc()
+
+                            # 검증 오류 시에도 결과 저장
+                            store_verification_result(False, f"검증 오류: {str(verify_e)}")
 
                             # 검증 실패해도 액션은 실행됐으므로 일단 성공으로 처리
                             send_state({
@@ -926,6 +971,18 @@ def send_state(data: dict): #백엔드로 상태 전송
             print(f"[전송 실패] 상태 코드: {response.status_code}")
     except Exception as e:
         print(f"[전송 오류] {e}")
+
+
+def store_verification_result(success: bool, message: str): #검증 결과 저장
+    """
+    액션 실행 후 검증 결과를 전역 변수에 저장
+    백엔드가 /verification 요청을 보내면 반환됨
+    """
+    global VERIFICATION_RESULT
+    VERIFICATION_RESULT["success"] = success
+    VERIFICATION_RESULT["message"] = message
+    VERIFICATION_RESULT["has_result"] = True
+    print(f"[검증 저장] 성공={success}, 메시지={message}")
 
 
 async def cleanup_browsers(): #모든 브라우저 인스턴스 종료 + 상태 초기화
