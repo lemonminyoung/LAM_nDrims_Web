@@ -614,7 +614,7 @@ async def execute_trajectory_in_browser(actions, action_description, browser_inf
             verification_message = "액션 실행 완료" if is_success else "일부 액션 실행 실패"
 
         # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
-        store_verification_result(is_success, expected_title if expected_title else verification_message)
+        store_verification_result(is_success, verification_message)
 
         # 결과 로깅
         if is_success:
@@ -794,7 +794,7 @@ async def execute_action_command():
                             print("=" * 60)
 
                             # 검증 결과를 저장 (백엔드가 요청하면 전송됨)
-                            store_verification_result(is_verified, expected_title if expected_title else verification_message)
+                            store_verification_result(is_verified, verification_message)
 
                         except Exception as verify_e:
                             print(f"[오류] 페이지 검증 실패: {verify_e}")
